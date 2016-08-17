@@ -13,6 +13,8 @@ __author__ = 'Aaron Hosford'
 
 
 def same(expr1, expr2):
+    """Determine whether two ASTs are the same. This function is necessary for *testing* equality, because
+    the == operator has been overridden for *building* equality comparison ASTs."""
     if isinstance(expr1, SQLExpression):
         return expr1.same_as(expr2)
     elif isinstance(expr2, SQLExpression):
@@ -22,12 +24,14 @@ def same(expr1, expr2):
 
 
 class SQLExpression(metaclass=ABCMeta):
+    """Abstract base class for all SQL expressions and statements."""
 
     @abstractmethod
     def _get_repr_args(self):
         raise NotImplementedError()
 
     def copy(self):
+        """Make a copy of this SQL expression."""
         args = []
         kwargs = {}
         kw = False
@@ -55,10 +59,14 @@ class SQLExpression(metaclass=ABCMeta):
         return type(self).__name__ + '(' + ', '.join(args) + ')'
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
         return type(self) is type(other)
 
 
 class SQLCommand(SQLExpression, metaclass=ABCMeta):
+    """Abstract base class for SQL commands, i.e. selects, inserts, updates, and deletes."""
 
     def __init__(self, table=None, fields=None, where=None):
         assert table is None or (table and isinstance(table, TableExpression))
@@ -78,6 +86,7 @@ class SQLCommand(SQLExpression, metaclass=ABCMeta):
         ]
 
     def compile(self, dialect=None):
+        """Compile this SQL command into the given (or current default) dialect."""
         dialect = sql_dialects.dialects.REGISTRY[dialect]
         return dialect.build_command(self)
 
@@ -90,25 +99,30 @@ class SQLCommand(SQLExpression, metaclass=ABCMeta):
 
     @property
     def table(self):
+        """The table or JOIN that this SQL command operates on."""
         return self._table
 
     @table.setter
     def table(self, table):
+        """The table or JOIN that this SQL command operates on."""
         if isinstance(table, Identifier):
             table = Table(table)
         elif isinstance(table, str):
             table = Table(Identifier((table,)))
         else:
-            assert isinstance(table, Table)
-        assert table.identifier
+            assert isinstance(table, TableExpression)
+        if isinstance(table, Table):
+            assert table.identifier
         self._table = table
 
     @property
     def field_list(self):
+        """The list of fields for this SQL command."""
         return self._fields
 
     @field_list.setter
     def field_list(self, fields):
+        """The list of fields for this SQL command."""
         if fields is None or isinstance(fields, FieldList):
             self._fields = fields
             return
@@ -134,10 +148,12 @@ class SQLCommand(SQLExpression, metaclass=ABCMeta):
 
     @property
     def where_clause(self):
+        """The WHERE clause for this SQL command."""
         return self._where_clause
 
     @where_clause.setter
     def where_clause(self, clause):
+        """The WHERE clause for this SQL command."""
         if isinstance(clause, Value):
             clause = Where(clause)
         else:
@@ -151,6 +167,7 @@ class SQLCommand(SQLExpression, metaclass=ABCMeta):
         return result
 
     def fields(self, *fields):
+        """Create a new SQL command object by adding a list of fields."""
         assert self._fields is None
 
         if len(fields) == 1 and (fields[0] is None or isinstance(fields[0], FieldList)):
@@ -160,21 +177,44 @@ class SQLCommand(SQLExpression, metaclass=ABCMeta):
         result.field_list = fields
         return result
 
+    def join(self, table):
+        """Create a new SQL command object by joining the table to another one."""
+        left = self._table
+        assert isinstance(left, TableExpression)
+        result = self.copy()
+        result.table = left.join(table)
+        return result
+
+    def on(self, clause):
+        """Create a new SQL command object by adding an ON clause to the join."""
+        join = self._table
+        assert isinstance(join, Join)
+        result = self.copy()
+        result.table = join.on(clause)
+        return result
+
     def where(self, clause):
+        """Create a new SQL command object by adding a where clause."""
         assert self._where_clause is None
         result = self.copy()
         result.where_clause = clause
         return result
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, SQLCommand)
         return (
-            super().same_as(other) and
             same(self._table, other._table) and
             same(self._fields, other._fields)
         )
 
 
 class SQLWriteCommand(SQLCommand):
+    """Abstract base class for SQL commands that write new data to the database, i.e. inserts and updates."""
 
     def __init__(self, table=None, fields=None, values=None, where=None):
         assert values is None or isinstance(values, (ValueList, Select))
@@ -192,10 +232,12 @@ class SQLWriteCommand(SQLCommand):
 
     @property
     def value_list(self):
+        """The list of values to be written to the fields."""
         return self._values
 
     @value_list.setter
     def value_list(self, values):
+        """The list of values to be written to the fields."""
         if values is None or isinstance(values, ValueList):
             self._values = values
             return
@@ -219,6 +261,7 @@ class SQLWriteCommand(SQLCommand):
 
     @property
     def width(self):
+        """The number of field/value pairs in this SQL insert or update."""
         if self._fields is not None:
             return self._fields.width
         if self._values is not None:
@@ -226,6 +269,7 @@ class SQLWriteCommand(SQLCommand):
         return None
 
     def values(self, *values):
+        """Create a new SQLWriteCommand instance by adding a list of values."""
         assert self._values is None
 
         if len(values) == 1 and (values[0] is None or isinstance(values[0], ValueList)):
@@ -236,6 +280,7 @@ class SQLWriteCommand(SQLCommand):
         return result
 
     def set(self, *args, **kwargs):
+        """Create a new SQLWriteCommand instance by adding one or more field/value pairs."""
         # Two possible uses:
         #   update.set(field, value)
         #   update.set(field1=value1, field2=value2, ...)
@@ -272,10 +317,17 @@ class SQLWriteCommand(SQLCommand):
         return result
 
     def same_as(self, other):
-        return super().same_as(other) and same(self._values, other._values)
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, SQLWriteCommand)
+        return same(self._values, other._values)
 
 
 class Select(SQLCommand):
+    """A SQL select statement, as an AST."""
 
     def __init__(self, table=None, fields=None, where=None, distinct=False, limit=None,
                  order_by=None, group_by=None):
@@ -305,19 +357,23 @@ class Select(SQLCommand):
 
     @property
     def is_distinct(self):
+        """Whether the select statement queries for distinct records."""
         return self._distinct
 
     @is_distinct.setter
     def is_distinct(self, distinct):
+        """Whether the select statement queries for distinct records."""
         assert isinstance(distinct, bool)
         self._distinct = distinct
 
     @property
     def limited_to(self):
+        """The upper limit, if any, on the number of rows returned."""
         return self._limited_to
 
     @limited_to.setter
     def limited_to(self, limit):
+        """The upper limit, if any, on the number of rows returned."""
         if isinstance(limit, int):
             limit = Limit(limit)
         else:
@@ -326,10 +382,12 @@ class Select(SQLCommand):
 
     @property
     def order(self):
+        """The ordering clause associated with this select statement."""
         return self._order
 
     @order.setter
     def order(self, order):
+        """The ordering clause associated with this select statement."""
         if isinstance(order, OrderBy):
             self._order = order
         else:
@@ -337,10 +395,12 @@ class Select(SQLCommand):
 
     @property
     def grouping(self):
+        """The grouping clause associated with this select statement."""
         return self._grouping
 
     @grouping.setter
     def grouping(self, grouping):
+        """The grouping clause associated with this select statement."""
         if isinstance(grouping, GroupBy):
             self._grouping = grouping
         else:
@@ -348,25 +408,30 @@ class Select(SQLCommand):
 
     @property
     def width(self):
+        """The number of fields selected in this select statement, or None if it is a select * statement."""
         if self._fields is None:
             return None
         return self._fields.width
 
     def from_(self, table):
+        """Create a new select statement by adding a FROM clause."""
         return self._from(table)
 
     def distinct(self):
+        """Create a new select statement by adding a distinct condition on the results."""
         result = self.copy()
         result.is_distinct = True
         return result
 
     def limit(self, limit):
+        """Create a new select statement by applying an upper limit to the number of selected rows."""
         assert self._limited_to is None
         result = self.copy()
         result.limited_to = limit
         return result
 
     def order_by(self, *order):
+        """Create a new select statement by applying an ordering to the results."""
         assert self._order is None
 
         if len(order) == 1 and isinstance(order[0], OrderBy):
@@ -377,6 +442,7 @@ class Select(SQLCommand):
         return result
 
     def group_by(self, *grouping):
+        """Create a new select statement by applying a grouping to the results."""
         assert self._grouping is None
 
         if len(grouping) == 1 and isinstance(grouping[0], OrderBy):
@@ -387,16 +453,22 @@ class Select(SQLCommand):
         return result
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, Select)
         return (
-            super().same_as(other) and
             same(self._distinct, other._distinct) and
-            same(self._limited_to, other._limit_to) and
-            same(self._order, other._ordering) and
+            same(self._limited_to, other._limited_to) and
+            same(self._order, other._order) and
             same(self._grouping, other._grouping)
         )
 
 
 class Insert(SQLWriteCommand):
+    """A SQL insert statement, as an AST."""
 
     def __init__(self, table=None, fields=None, values=None):
         super().__init__(table, fields, values, where=None)
@@ -410,13 +482,16 @@ class Insert(SQLWriteCommand):
         ]
 
     def into(self, table):
+        """Create a new insert statement by adding an into clause."""
         return self._from(table)
 
     def where(self, clause):
+        """Create a new insert statement by adding a where clause."""
         raise NotImplementedError("WHERE clauses are not supported for INSERT statements.")
 
 
 class Update(SQLWriteCommand):
+    """A SQL update statement, as an AST."""
 
     def __init__(self, table=None, fields=None, values=None, where=None):
         assert not isinstance(values, Select)
@@ -432,10 +507,12 @@ class Update(SQLWriteCommand):
         ]
 
     def from_(self, table):
+        """Create a new update statement by adding a from clause."""
         return self._from(table)
 
 
 class Delete(SQLCommand):
+    """A SQL delete statement as an AST."""
 
     def __init__(self, table=None, where=None):
         super().__init__(table, fields=None, where=where)
@@ -448,15 +525,19 @@ class Delete(SQLCommand):
         ]
 
     def from_(self, table):
+        """Create a new delete statement by adding a from clause."""
         return self._from(table)
 
     def fields(self, *fields):
+        """UNSUPPORTED OPERATION"""
         raise NotImplementedError("Field lists are not supported for DELETE statements.")
 
 
 class Identifier(SQLExpression):
+    """A SQL identifier, such as a table or field name."""
 
     def __init__(self, path):
+        path = tuple(path)
         assert all(element and isinstance(element, str) for element in path)
 
         super().__init__()
@@ -471,20 +552,24 @@ class Identifier(SQLExpression):
 
     @property
     def path(self):
+        """The "path" of the SQL identifier, meaning a tuple of the individual elements of the identifier."""
         return self._path
 
     @property
     def name(self):
+        """The last element in the identifier's "path"."""
         return self._path[-1]
 
     @property
     def parent(self):
+        """The parent identifier, meaning everything up to but not including the last element (the name) of this one."""
         if len(self._path) > 1:
             return Identifier(self._path[:-1])
         else:
             return None
 
     def get(self, name):
+        """Create a child identifier by appending a new name to this identifier's path."""
         if isinstance(name, str):
             return Identifier(self._path + (name,))
         else:
@@ -501,7 +586,13 @@ class Identifier(SQLExpression):
         return self.get(name)
 
     def same_as(self, other):
-        return super().same_as(other) and self._path == other._path
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, Identifier)
+        return self._path == other._path
 
 
 class TableExpression(SQLExpression, metaclass=ABCMeta):
@@ -509,47 +600,69 @@ class TableExpression(SQLExpression, metaclass=ABCMeta):
     Base class for table expressions.
     """
 
-    @abstractmethod
     @property
+    @abstractmethod
     def leftmost(self):
+        """Return the leftmost table in a table or join expression."""
         raise NotImplementedError()
 
     def join(self, table, on=None):
+        """Create a new join statement by adding another table joined to this table or join."""
         return Join(JoinTypes.INNER, self, table, on)
 
     def inner_join(self, table, on=None):
+        """Create a new inner join statement by adding another table inner-joined to this table or join."""
         return Join(JoinTypes.INNER, self, table, on)
 
     def left_join(self, table, on=None):
+        """Create a new left join statement by adding another table left-joined to this table or join."""
         return Join(JoinTypes.LEFT, self, table, on)
 
     def right_join(self, table, on=None):
+        """Create a new right join statement by adding another table right-joined to this table or join."""
         return Join(JoinTypes.RIGHT, self, table, on)
 
     def outer_join(self, table, on=None):
+        """Create a new outer join statement by adding another table outer-joined to this table or join."""
         return Join(JoinTypes.OUTER, self, table, on)
 
     def full_join(self, table, on=None):
+        """Create a new full join statement by adding another table full-joined to this table or join."""
         return Join(JoinTypes.OUTER, self, table, on)
 
     def select(self, *fields):
-        return Select(self).fields(*fields)
+        """Create a new select statement from this table or join, optionally adding a field list."""
+        if fields:
+            return Select(self).fields(*fields)
+        else:
+            return Select(self)
 
     def update(self, *fields):
-        return Update(self).fields(*fields)
+        """Create a new update statement from this table or join, optionally adding a field list."""
+        if fields:
+            return Update(self).fields(*fields)
+        else:
+            return Update(self)
 
     def insert(self, *fields):
-        return Insert(self).fields(*fields)
+        """Create a new insert statement from this table or join, optionally adding a field list."""
+        if fields:
+            return Insert(self).fields(*fields)
+        else:
+            return Insert(self)
 
     def delete(self):
+        """Create a new delete statement from this table or join."""
         return Delete(self)
 
     @abstractmethod
     def get_field(self, field):
+        """Get a field associated with this table or join."""
         raise NotImplementedError()
 
 
 class Table(TableExpression):
+    """A reference to a table within a SQL statement."""
 
     def __init__(self, identifier):
         if identifier is None:
@@ -580,13 +693,16 @@ class Table(TableExpression):
 
     @property
     def identifier(self):
+        """The identifier representing this table."""
         return self._identifier
 
     @property
     def leftmost(self):
+        """Return the leftmost table in a table or join expression."""
         return self
 
     def get_field(self, field):
+        """Get a field associated with this table."""
         if isinstance(field, Alias):
             alias, field = field, field.expression
         else:
@@ -617,19 +733,32 @@ class Table(TableExpression):
 
     @property
     def field(self):
+        """Get the field corresponding to this identifier."""
         return Field(self._identifier)
 
     def same_as(self, other):
-        return super().same_as(other) and same(self._identifier, other._identifier)
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, Table)
+        return same(self._identifier, other._identifier)
 
 
 class Join(TableExpression):
+    """A SQL join statement."""
 
     def __init__(self, join_type, left, right, on=None):
         assert JoinTypes.is_valid(join_type)
         assert isinstance(left, TableExpression)
         assert isinstance(right, Table), "Right argument must be table. JOINS are left-associative."
         assert on is None or isinstance(on, On)
+
+        # Make sure neither side is just the bare T object, but is actually a table or join.
+        if isinstance(left, Table):
+            assert left.identifier
+        assert right.identifier
 
         super().__init__()
 
@@ -649,28 +778,82 @@ class Join(TableExpression):
 
     @property
     def join_type(self):
+        """The type of join for this join statement. Must be a valid join type enumerated in JoinTypes."""
         return self._join_type
 
     @property
     def left(self):
+        """The table or join appearing to the left of the join."""
         return self._left
 
     @property
     def right(self):
+        """The table appearing to the right of the join."""
         return self._right
 
     @property
-    def on(self):
+    def joined_tables(self):
+        """An iterator over the joined tables, from left to right."""
+        if isinstance(self._left, Table):
+            yield self._left
+        else:
+            assert isinstance(self._left, Join)
+            yield from self._left.joined_tables
+        yield self._right
+
+    @property
+    def on_clause(self):
+        """The ON clause associated with this join statement."""
         return self._on
 
+    @on_clause.setter
+    def on_clause(self, clause):
+        """The ON clause associated with this join statement."""
+        if isinstance(clause, Operation):
+            clause = On(clause)
+        else:
+            assert isinstance(clause, On)
+        self._on = clause
+
     def leftmost(self):
+        """Return the leftmost table in a table or join expression."""
         current = self._left
-        while isinstance(self._left, Join):
+        while isinstance(current._left, Join):
             current = current._left
+            assert isinstance(current, (Join, Table))
         assert isinstance(current, Table)
         return current
 
+    def on(self, clause):
+        """Create a new join expression by adding an ON clause to this join."""
+        assert self._on is None
+        result = self.copy()
+        result.on_clause = clause
+        return result
+
+    def using(self, field):
+        """Create a new join expression by adding (the equivalent to) a USING clause to this join."""
+        # TODO: Can we use a specialized construct here instead of doing this? Maybe a Using class,
+        #       which can optionally be used in place of the On class for the on_clause, and which
+        #       knows how to convert itself to an On clause for dialects that don't support USING?
+        assert self._on is None
+        if not isinstance(field, Field):
+            field = Field(field)
+        joined_tables = list(self.joined_tables)
+        condition = None
+        for index in range(len(joined_tables) - 1):
+            left_field = joined_tables[index].get_field(field)
+            right_field = joined_tables[index + 1].get_field(field)
+            if condition is None:
+                condition = (left_field == right_field)
+            else:
+                condition &= (left_field == right_field)
+        result = self.copy()
+        result.on_clause = On(condition)
+        return result
+
     def get_field(self, field):
+        """Get a field associated with this join."""
         if isinstance(field, Alias):
             alias, field = field, field.expression
         else:
@@ -684,8 +867,13 @@ class Join(TableExpression):
             return self._left.get_field(alias or field)
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, Join)
         return (
-            super().same_as(other) and
             self._join_type == other._join_type and
             same(self._left, other._left) and
             same(other._right, self._right) and
@@ -694,9 +882,15 @@ class Join(TableExpression):
 
 
 class Alias(SQLExpression):
+    """An expression acting in the role of a selected field in a select statement."""
 
     def __init__(self, expression, alias=None):
         assert isinstance(expression, Value)
+
+        if isinstance(alias, Field):
+            assert alias.table is None
+            alias = alias.identifier.name
+
         assert alias is None or (alias and isinstance(alias, str))
 
         self._expression = expression
@@ -711,15 +905,22 @@ class Alias(SQLExpression):
 
     @property
     def name(self):
+        """The associated field name for this expression, if any."""
         return self._alias
 
     @property
     def expression(self):
+        """The (possibly aliased) expression."""
         return self._expression
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, Alias)
         return (
-            super().same_as(other) and
             same(self._expression, other._expression) and
             same(self._alias, other._alias)
         )
@@ -757,13 +958,16 @@ class FieldList(SQLExpression):
 
     @property
     def entries(self):
+        """The individual entries in this field list."""
         return self._entries
 
     @property
     def width(self):
+        """The number of entries in this field list."""
         return len(self._entries)
 
     def append(self, entry):
+        """Add a new entry to the field list."""
         if isinstance(entry, Alias):
             alias = entry
         else:
@@ -773,8 +977,13 @@ class FieldList(SQLExpression):
         self._entries += (alias,)
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, FieldList)
         return (
-            super().same_as(other) and
             self.width == other.width and
             all(same(mine, yours) for mine, yours in zip(self._entries, other._entries))
         )
@@ -782,7 +991,7 @@ class FieldList(SQLExpression):
 
 class ValueList(SQLExpression):
     """
-    A list of value_list in a SQL command.
+    A list of value_list in a SQL insert or update.
     """
 
     def __init__(self, entries):
@@ -801,19 +1010,27 @@ class ValueList(SQLExpression):
 
     @property
     def entries(self):
+        """The individual entries in this value list."""
         return self._entries
 
     @property
     def width(self):
+        """The number of entries in this value list."""
         return len(self._entries)
 
     def append(self, value):
+        """Add a new entry to this value list."""
         assert isinstance(value, Value)
         self._entries += (value,)
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, ValueList)
         return (
-            super().same_as(other) and
             self.width == other.width and
             all(same(mine, yours) for mine, yours in zip(self._entries, other._entries))
         )
@@ -840,10 +1057,17 @@ class Limit(SQLExpression):
 
     @property
     def count(self):
+        """The maximum number of rows."""
         return self._count
 
     def same_as(self, other):
-        return super().same_as(other) and self._count == other._count
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, Limit)
+        return self._count == other._count
 
 
 class On(SQLExpression):
@@ -866,10 +1090,17 @@ class On(SQLExpression):
 
     @property
     def condition(self):
+        """The condition(s) of this ON clause."""
         return self._condition
 
     def same_as(self, other):
-        return super().same_as(other) and same(self._condition, other._condition)
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, On)
+        return same(self._condition, other._condition)
 
 
 class Where(SQLExpression):
@@ -892,10 +1123,17 @@ class Where(SQLExpression):
 
     @property
     def condition(self):
+        """The condition(s) of this where clause."""
         return self._condition
 
     def same_as(self, other):
-        return super().same_as(other) and same(self._condition, other._condition)
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, Where)
+        return same(self._condition, other._condition)
 
 
 class GroupBy(SQLExpression):
@@ -920,11 +1158,17 @@ class GroupBy(SQLExpression):
 
     @property
     def fields(self):
+        """The fields listed in this grouping clause."""
         return self._fields
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, GroupBy)
         return (
-            super().same_as(other) and
             len(self._fields) == len(other._fields) and
             all(same(mine, yours) for mine, yours in zip(self._fields, other._fields))
         )
@@ -953,15 +1197,22 @@ class OrderByEntry(SQLExpression):
 
     @property
     def field(self):
+        """The field for this ordering clause entry."""
         return self._field
 
     @property
     def ascending(self):
+        """Whether this field is ordered in ascending (vs. descending) order."""
         return self._ascending
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, OrderByEntry)
         return (
-            super().same_as(other) and
             same(self._field, other._field) and
             self._ascending == other._ascending
         )
@@ -989,11 +1240,17 @@ class OrderBy(SQLExpression):
 
     @property
     def entries(self):
+        """The entries in this ordering clause."""
         return self._entries
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, OrderBy)
         return (
-            super().same_as(other) and
             len(self._entries) == len(other._entries) and
             all(same(mine, yours) for mine, yours in zip(self._entries, other._entries))
         )
@@ -1006,6 +1263,7 @@ class Value(SQLExpression, metaclass=ABCMeta):
     """
 
     def as_(self, alias):
+        """Add an alias field name to this SQL value expression."""
         return Alias(self, alias)
 
     def __eq__(self, other):
@@ -1065,25 +1323,33 @@ class Value(SQLExpression, metaclass=ABCMeta):
         return Operation(Unary.NEG, self)
 
     def length(self):
+        """Create a new SQL value expression representing the length of this string expression."""
         return Operation(Unary.LENGTH, self)
 
     def upper(self):
+        """Create a new SQL value expression representing the upper case of this string expression."""
         return Operation(Unary.UPPER_CASE, self)
 
     def lower(self):
+        """Create a new SQL value expression representing the lower case of this string expression."""
         return Operation(Unary.LOWER_CASE, self)
 
     def round(self, precision):
+        """Create a new SQL value expression representing the rounding of this expression to a particular precision."""
         if not isinstance(precision, Value):
             precision = Literal(precision)
         return Operation(Binary.ROUND, self, precision)
 
     def format(self, form):
+        """
+        Create a new SQL value expression representing the formatting of this expression to a particular string format.
+        """
         if not isinstance(form, Value):
             form = Literal(form)
         return Operation(Binary.FORMAT, self, form)
 
     def substring(self, start, length):
+        """Create a new SQL value expression representing the substring of this string expression."""
         if not isinstance(start, Value):
             start = Literal(start)
         if not isinstance(length, Value):
@@ -1091,6 +1357,7 @@ class Value(SQLExpression, metaclass=ABCMeta):
         return Operation(Ternary.SUBSTRING, self, start, length)
 
     def if_else(self, condition, alternative):
+        """Create a new if/else value expression which uses the given alternative when the condition is not met."""
         assert isinstance(condition, Value), "Condition cannot be a literal value"
         if not isinstance(alternative, Value):
             alternative = Literal(alternative)
@@ -1133,10 +1400,12 @@ class Field(Value):
 
     @property
     def identifier(self):
+        """The identifier representing this field."""
         return self._identifier
 
     @property
     def table(self):
+        """The table to which this field belongs."""
         if self._identifier.parent:
             return Table(self._identifier.parent)
         else:
@@ -1154,7 +1423,13 @@ class Field(Value):
         return Field(self._identifier[name])
 
     def same_as(self, other):
-        return super().same_as(other) and same(self._identifier, other._identifier)
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, Field)
+        return same(self._identifier, other._identifier)
 
 
 class Parameter(Value):
@@ -1177,9 +1452,13 @@ class Parameter(Value):
 
     @property
     def name(self):
+        """The name of this parameter, if any."""
         return self._name
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
         return self is other
 
 
@@ -1207,15 +1486,22 @@ class Literal(Value):
 
     @property
     def value(self):
+        """The corresponding Python value for this SQL literal value."""
         return self._value
 
     @property
     def sql_type(self):
+        """The SQL value type for this SQL literal value."""
         return self._sql_type
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, Literal)
         return (
-            super().same_as(other) and
             self._value == other._value and
             self._sql_type == other._sql_type
         )
@@ -1254,15 +1540,22 @@ class Operation(Value):
 
     @property
     def operator(self):
+        """The operator or function being applied in this SQL value expression."""
         return self._operator
 
     @property
     def operands(self):
+        """The operands supplied to the operator or function in this SQL value expression."""
         return self._operands
 
     def same_as(self, other):
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, Operation)
         return (
-            super().same_as(other) and
             self._operator == other._operator and
             len(self._operands) == len(other._operands) and
             all(same(mine, yours) for mine, yours in zip(self._operands, other._operands))
@@ -1270,6 +1563,7 @@ class Operation(Value):
 
 
 class QueryValue(Value):
+    """A SQL select statement, acting as a SQL value expression within another SQL statement."""
 
     def __init__(self, query):
         assert isinstance(query, Select)
@@ -1287,13 +1581,21 @@ class QueryValue(Value):
 
     @property
     def query(self):
+        """The SQL select statement acting as a value expression."""
         return self._query
 
     def same_as(self, other):
-        return super().same_as(other) and same(self._query, other._query)
+        """Check whether this SQL expression is the same as another. This method provides a way to check for equality
+        between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
+        comparison ASTs, rather than testing for equality between them."""
+        if not super().same_as(other):
+            return False
+        assert isinstance(other, QueryValue)
+        return same(self._query, other._query)
 
 
 def select(*fields):
+    """Create a new SQL select statement, optionally identifying which fields to select."""
     if fields:
         return Select().fields(*fields)
     else:
@@ -1301,6 +1603,9 @@ def select(*fields):
 
 
 def update(*fields, **field_value_pairs):
+    """
+    Create a new SQL update statement, optionally identifying which fields to update or a set of field/value pairs.
+    """
     assert not fields or not field_value_pairs
     if fields:
         return Update().fields(*fields)
@@ -1311,6 +1616,9 @@ def update(*fields, **field_value_pairs):
 
 
 def insert(*fields, **field_value_pairs):
+    """
+    Create a new SQL insert statement, optionally identifying which fields to insert or a set of field/value pairs.
+    """
     assert not fields or not field_value_pairs
     if fields:
         return Insert().fields(*fields)
@@ -1321,4 +1629,5 @@ def insert(*fields, **field_value_pairs):
 
 
 def delete():
+    """Create a new SQL delete statement."""
     return Delete()

@@ -1,8 +1,12 @@
+"""
+Implementation of the DialectRegistry class.
+"""
+
 import pkg_resources
 import warnings
 
+from ._base import SQLDialect
 from sql_dialects.exceptions import NoDefaultDialect
-from sql_dialects.dialects._base import SQLDialect
 
 __author__ = 'Aaron Hosford'
 
@@ -10,6 +14,7 @@ __author__ = 'Aaron Hosford'
 # TODO: Support alternate names for dialects.
 
 class DialectRegistry:
+    """Tracks registered SQL dialects and the default SQL dialect. Allows SQL dialects to be referenced by name."""
 
     def __init__(self):
         self._dialects_by_name = {}
@@ -18,19 +23,26 @@ class DialectRegistry:
 
     @property
     def default(self):
+        """The default SQL dialect, or None."""
         return self._default_dialect
 
     @default.setter
     def default(self, dialect):
+        """The default SQL dialect, or None."""
         if isinstance(dialect, str):
             dialect = self[dialect]
         self.add(dialect, set_default=True)
 
     @default.deleter
     def default(self):
+        """The default SQL dialect, or None."""
         self._default_dialect = None
 
     def load(self):
+        """
+        Load all currently installed SQL dialects from their respective plugin modules. Warn if a dialect could not be
+        loaded.
+        """
         for entry_point in pkg_resources.iter_entry_points(group='sql_dialects'):
             try:
                 self.add(entry_point.load())
@@ -38,6 +50,7 @@ class DialectRegistry:
                 warnings.warn(str(exc))
 
     def add(self, dialect, set_default=False):
+        """Register a new SQL dialect."""
         assert isinstance(dialect, SQLDialect)
 
         lower_name = dialect.name.lower()
@@ -53,6 +66,7 @@ class DialectRegistry:
             self._default_dialect = dialect
 
     def remove(self, dialect):
+        """Unregister a SQL dialect."""
         if isinstance(dialect, str):
             dialect = self[dialect]
 
@@ -63,10 +77,12 @@ class DialectRegistry:
             self._default_dialect = None
 
     def discard(self, dialect):
+        """Unregister a SQL dialect, but do not complain if it was not registered to start with."""
         if dialect in self:
             self.remove(dialect)
 
     def get(self, item, default=None):
+        """Look up and return a SQL dialect."""
         if item in self:
             return self[item]
         else:

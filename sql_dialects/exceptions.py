@@ -1,3 +1,7 @@
+"""
+Special non-standard exceptions raised by the sql_dialects package.
+"""
+
 __author__ = 'Aaron Hosford'
 
 

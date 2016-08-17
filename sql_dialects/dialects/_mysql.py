@@ -1,15 +1,21 @@
+"""
+Implementation of the MySQL SQL dialect.
+"""
+
 # TODO: This is currently just a copy of the T-SQL dialect, which has been modified slightly. The
 #       modifications to MySQL syntax need to be completed. See http://www.rlbuckmaster.com/?p=64
 
-__author__ = 'Aaron Hosford'
+from ._base import SQLDialect
 
-from sql_dialects.dialects._base import SQLDialect
 from sql_dialects.enums import Nullary, Unary, Binary, Ternary, JoinTypes, LiteralTypes
 from sql_dialects import ast as sql
 from sql_dialects.dialects import REGISTRY
 
+__author__ = 'Aaron Hosford'
+
 
 class MySQLDialect(SQLDialect):
+    """The MySQL SQL dialect."""
 
     def __init__(self):
         super().__init__('MySQL')
@@ -48,9 +54,16 @@ class MySQLDialect(SQLDialect):
         }
 
     def build_command(self, tree):
+        """
+        Generate a SQL command from an AST.
+
+        :param tree: The abstract syntax tree.
+        :return: A SQL expression.
+        """
         return super().build_command(tree) + ';'  # MySQL requires ; termination for commands
 
     def build_select(self, tree):
+        """Build a select statement from the given AST."""
         assert isinstance(tree, sql.Select)
 
         template = 'SELECT {top}{distinct}{fields} FROM {table}{where}{group_by}{order_by}'
@@ -65,6 +78,7 @@ class MySQLDialect(SQLDialect):
         )
 
     def build_insert(self, tree):
+        """Build an insert statement from the given AST."""
         assert isinstance(tree, sql.Insert)
 
         template = 'INSERT INTO {table}{fields} VALUES {values}'
@@ -79,6 +93,7 @@ class MySQLDialect(SQLDialect):
         )
 
     def build_update(self, tree):
+        """Build an update statement from the given AST."""
         assert isinstance(tree, sql.Update)
 
         template = 'UPDATE {tables} SET {assignments}{where}'
@@ -89,6 +104,7 @@ class MySQLDialect(SQLDialect):
         )
 
     def build_delete(self, tree):
+        """Build a delete statement from the given AST."""
         assert isinstance(tree, sql.Delete)
 
         template = 'DELETE FROM {table}{where}'
@@ -98,6 +114,7 @@ class MySQLDialect(SQLDialect):
         )
 
     def build_fields(self, tree, *, allow_aliases):
+        """Build a field list from an AST."""
         assert tree is None or isinstance(tree, sql.FieldList)
         assert isinstance(allow_aliases, bool)
 
@@ -118,6 +135,7 @@ class MySQLDialect(SQLDialect):
         return ', '.join(fields)
 
     def build_table(self, tree, *, allow_joins):
+        """Build a table name or joined list of table names from an AST."""
         assert isinstance(tree, sql.TableExpression)
         assert isinstance(allow_joins, bool)
 
@@ -132,30 +150,36 @@ class MySQLDialect(SQLDialect):
             left=self.build_table(tree.left, allow_joins=True),
             join=self._join_map[tree.join_type],
             right=self.build_table(tree.right, allow_joins=False),
-            on=(' ' + self.build_on(tree.on)) if tree.on else ''
+            on=(' ' + self.build_on(tree.on_clause)) if tree.on_clause else ''
         )
 
     def build_where(self, tree):
+        """Build a where-clause from an AST."""
         assert isinstance(tree, sql.Where)
         return 'WHERE %s' % self.build_value(tree.condition)
 
     def build_on(self, tree):
+        """Build an ON statement (table1 JOIN table2 ON ...) from an AST."""
         assert isinstance(tree, sql.On)
         return 'ON %s' % self.build_value(tree.condition)
 
     def build_group_by(self, tree):
+        """Build a GROUP BY statement from an AST."""
         assert isinstance(tree, sql.GroupBy)
         return 'GROUP BY ' + self.build_fields(tree.fields, allow_aliases=False)
 
     def build_order_by(self, tree):
+        """Build an ORDER BY statement from an AST."""
         assert isinstance(tree, sql.OrderBy)
         return 'ORDER BY ' + ', '.join(self.build_order_by_entry(entry) for entry in tree.entries)
 
     def build_order_by_entry(self, tree):
+        """Build an entry in an ORDER BY field list from an AST."""
         assert isinstance(tree, sql.OrderByEntry)
         return self.build_field(tree.field) + (' ASC' if tree.ascending else ' DESC')
 
     def build_field(self, tree, *, allow_aliases=False):
+        """Build a field in a field list from an AST."""
         if allow_aliases and isinstance(tree, sql.Alias):
             entry = self.build_value(tree.expression)
             if tree.name:
@@ -170,6 +194,7 @@ class MySQLDialect(SQLDialect):
             return '[%s]' % tree.identifier.name
 
     def build_values(self, tree):
+        """Build a value list from an AST."""
         if isinstance(tree, sql.Select):
             return '(%s)' % self.build_select(tree)
         else:
@@ -177,6 +202,7 @@ class MySQLDialect(SQLDialect):
             return '(%s)' % ', '.join(self.build_value(entry) for entry in tree.entries)
 
     def build_assignments(self, fields, values):
+        """Build a field/value assignment list from an AST."""
         assert isinstance(fields, sql.FieldList)
         assert isinstance(values, sql.ValueList)
         assert fields.width == values.width
@@ -185,6 +211,7 @@ class MySQLDialect(SQLDialect):
                          for field, value in zip(fields.entries, values.entries))
 
     def build_value(self, tree):
+        """Build a value from an AST."""
         assert isinstance(tree, (sql.Value, sql.Select))
 
         if isinstance(tree, sql.Field):
@@ -201,6 +228,7 @@ class MySQLDialect(SQLDialect):
 
     @staticmethod
     def build_literal(tree):
+        """Build a literal value from an AST."""
         assert isinstance(tree, sql.Literal)
 
         if tree.sql_type == LiteralTypes.STRING:
@@ -216,6 +244,7 @@ class MySQLDialect(SQLDialect):
             return 'NULL'
 
     def build_operation(self, tree):
+        """Build an operation (e.g. addition, subtraction, or function call) from an AST."""
         assert isinstance(tree, sql.Operation)
 
         params = {}
@@ -228,5 +257,6 @@ class MySQLDialect(SQLDialect):
         return self._operations[tree.operator].format_map(params)
 
 
+# Create the dialect and register it.
 MY_SQL = MySQLDialect()
 REGISTRY.add(MY_SQL)

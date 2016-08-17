@@ -1,23 +1,32 @@
+"""The setup script for the sql_dialects package."""
+
+import os
 from setuptools import setup
 
-setup(
-    name='sql_dialects',
-    version='0',
-    packages=['sql_dialects', 'sql_dialects.dialects'],
-    url='',
-    license='',
-    author='Aaron Hosford',
-    author_email='aaron.hosford@ericsson.com',
-    description='Dialog-agnostic construction of SQL commands',
 
-    # Registration of built-in plugins. See http://stackoverflow.com/a/9615473/4683578 for
-    # an explanation of how plugins work in the general case. Other, separately installable
-    # packages can register their own SQL dialects as plugins using this file as an example.
-    # They will automatically be made available by name when using this library.
-    entry_points={
-        'sql_dialects': [
-            'T-SQL = sql_dialects.dialects._t_sql:T_SQL',
-            # TODO: Add MySQL and SQLite
-        ]
-    },
-)
+DIST_FOLDER = r'\\usmmisgroup01001.mm.us.am.ericsson.se\group20ia2\automation\Libraries\DIST\Python'
+
+
+try:
+    # noinspection PyUnresolvedReferences
+    import infotags
+except ImportError:
+    # TODO: Someday, uncomment this and remove the os.system() call below. Before we can do that,
+    #       though, we need to make infotags available on the python package index.
+    # print("This setup script depends on infotags. Please install infotags using the command, "
+    #       "'pip install infotags' and then run this setup script again.")
+    # sys.exit(2)
+    os.system(r'pip install infotags --find-links ' + DIST_FOLDER)
+    import infotags
+
+
+PACKAGE_NAME = 'sql_dialects'
+
+
+cwd = os.getcwd()
+if os.path.dirname(__file__):
+    os.chdir(os.path.dirname(__file__))
+try:
+    setup(**infotags.get_info(PACKAGE_NAME))
+finally:
+    os.chdir(cwd)
