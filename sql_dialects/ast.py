@@ -58,6 +58,12 @@ class SQLExpression(metaclass=ABCMeta):
                 args.append(repr(value))
         return type(self).__name__ + '(' + ', '.join(args) + ')'
 
+    def __eq__(self, other):
+        raise ValueError("Object of type %s cannot be compared for equality. Use same() instead.")
+
+    def __ne__(self, other):
+        raise ValueError("Object of type %s cannot be compared for inequality. Use not same() instead.")
+
     def same_as(self, other):
         """Check whether this SQL expression is the same as another. This method provides a way to check for equality
         between two ASTs. The normal means of doing so, the == operator, has been overridden to create equality
@@ -161,7 +167,7 @@ class SQLCommand(SQLExpression, metaclass=ABCMeta):
         self._where_clause = clause
 
     def _from(self, table):
-        assert self._table is None
+        assert self._table is None or same(self._table, table)
         result = self.copy()
         result.table = table
         return result
@@ -193,9 +199,26 @@ class SQLCommand(SQLExpression, metaclass=ABCMeta):
         result.table = join.on(clause)
         return result
 
-    def where(self, clause):
+    def where(self, clause=None, **field_value_pairs):
         """Create a new SQL command object by adding a where clause."""
         assert self._where_clause is None
+
+        if field_value_pairs:
+            assert clause is None
+
+            for key, value in field_value_pairs.items():
+                field = Field(key)
+                if not isinstance(value, Value):
+                    assert not isinstance(value, SQLExpression)
+                    value = Literal(value)
+                piece = Operation(Binary.EQ, field, value)
+                if clause is None:
+                    clause = piece
+                else:
+                    clause = Operation(Binary.AND, clause, piece)
+        else:
+            assert not field_value_pairs
+
         result = self.copy()
         result.where_clause = clause
         return result
@@ -305,6 +328,9 @@ class SQLWriteCommand(SQLCommand):
                 field = Field(field)
             assert isinstance(field, Field)
 
+            if not isinstance(value, Value):
+                assert not isinstance(value, SQLExpression)
+                value = Literal(value)
             assert isinstance(value, Value)
 
             if result._fields is None:
@@ -485,7 +511,7 @@ class Insert(SQLWriteCommand):
         """Create a new insert statement by adding an into clause."""
         return self._from(table)
 
-    def where(self, clause):
+    def where(self, clause=None, **field_value_pairs):
         """Create a new insert statement by adding a where clause."""
         raise NotImplementedError("WHERE clauses are not supported for INSERT statements.")
 
@@ -637,17 +663,23 @@ class TableExpression(SQLExpression, metaclass=ABCMeta):
         else:
             return Select(self)
 
-    def update(self, *fields):
+    def update(self, *fields, **field_value_pairs):
         """Create a new update statement from this table or join, optionally adding a field list."""
+        assert not fields or not field_value_pairs
         if fields:
             return Update(self).fields(*fields)
+        elif field_value_pairs:
+            return Update(self).set(**field_value_pairs)
         else:
             return Update(self)
 
-    def insert(self, *fields):
+    def insert(self, *fields, **field_value_pairs):
         """Create a new insert statement from this table or join, optionally adding a field list."""
+        assert not fields or not field_value_pairs
         if fields:
             return Insert(self).fields(*fields)
+        elif field_value_pairs:
+            return Insert(self).set(**field_value_pairs)
         else:
             return Insert(self)
 
