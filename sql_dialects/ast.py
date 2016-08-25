@@ -313,16 +313,16 @@ class SQLWriteCommand(SQLCommand):
         if args:
             assert not kwargs
             field, value = args
-            pairs = {field: value}
+            pairs = [(field, value)]
         else:
             assert kwargs, "No field/value pairs provided."
-            pairs = kwargs
+            pairs = kwargs.items()
 
         assert (not self._fields and not self._values) or self._fields.width == self._values.width
 
         result = self.copy()
 
-        for field, value in pairs.items():
+        for field, value in pairs:
             # Only original field names are allowed, not aliases, and they must belong to the table.
             if isinstance(field, Alias):
                 assert field.name is None
