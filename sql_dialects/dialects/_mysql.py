@@ -198,7 +198,7 @@ class MySQLDialect(SQLDialect):
         if isinstance(tree, sql.Select):
             return '(%s)' % self.build_select(tree)
         else:
-            assert isinstance(tree, sql.ValueList)
+            assert isinstance(tree, sql.ValueList), "No values provided."
             return '(%s)' % ', '.join(self.build_value(entry) for entry in tree.entries)
 
     def build_assignments(self, fields, values):

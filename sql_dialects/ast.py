@@ -167,7 +167,10 @@ class SQLCommand(SQLExpression, metaclass=ABCMeta):
         self._where_clause = clause
 
     def _from(self, table):
-        assert self._table is None or same(self._table, table)
+        if isinstance(self._table, Table):
+            assert not self._table.identifier or same(self._table, table)
+        else:
+            assert self._table is None or same(self._table, table)
         result = self.copy()
         result.table = table
         return result
@@ -312,8 +315,10 @@ class SQLWriteCommand(SQLCommand):
             field, value = args
             pairs = {field: value}
         else:
-            assert kwargs
+            assert kwargs, "No field/value pairs provided."
             pairs = kwargs
+
+        assert (not self._fields and not self._values) or self._fields.width == self._values.width
 
         result = self.copy()
 
