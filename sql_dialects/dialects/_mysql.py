@@ -233,7 +233,7 @@ class MySQLDialect(SQLDialect):
 
         if tree.sql_type == LiteralTypes.STRING:
             return "'%s'" % tree.value.replace("'", "''")
-        elif tree.sql_type in (LiteralTypes.INTEGER, LiteralTypes.FLOAT):
+        elif tree.sql_type in (LiteralTypes.INTEGER, LiteralTypes.FLOAT, LiteralTypes.BOOLEAN):
             return str(tree.value)
         elif tree.sql_type == LiteralTypes.DATE:
             return "'%s'" % tree.value.strftime('%Y%m%d')

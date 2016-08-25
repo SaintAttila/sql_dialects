@@ -127,6 +127,7 @@ class LiteralTypes:
     """
 
     NULL = 'null'
+    BOOLEAN = 'boolean'
     STRING = 'string'
     INTEGER = 'integer'
     DATE = 'date'
@@ -135,6 +136,7 @@ class LiteralTypes:
 
     _map = {
         NULL: type(None),
+        BOOLEAN: bool,
         STRING: str,
         INTEGER: int,
         DATE: datetime.date,
@@ -144,6 +146,7 @@ class LiteralTypes:
 
     _reverse_map = {
         type(None): NULL,
+        bool: BOOLEAN,
         str: STRING,
         int: INTEGER,
         datetime.date: DATE,

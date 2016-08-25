@@ -222,6 +222,9 @@ class TSQLDialect(SQLDialect):
 
         if tree.sql_type == LiteralTypes.STRING:
             return "'%s'" % tree.value.replace("'", "''")
+        elif tree.sql_type == LiteralTypes.BOOLEAN:
+            # T-SQL can't handle true Booleans; it uses a single-bit int instead.
+            return str(int(tree.value))
         elif tree.sql_type in (LiteralTypes.INTEGER, LiteralTypes.FLOAT):
             return str(tree.value)
         elif tree.sql_type == LiteralTypes.DATE:
