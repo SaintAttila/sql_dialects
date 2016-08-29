@@ -50,7 +50,7 @@ class MySQLDialect(SQLDialect):
             Binary.FORMAT: 'FORMAT({p1},{p2})',
 
             Ternary.IF_ELSE: 'IF {p1} {p2} ELSE {p3}',
-            Ternary.SUBSTRING: 'MID({p1}, {p2}, {p3})',
+            Ternary.SUBSTRING: 'SUBSTRING({p1}, {p2}, {p3})',
         }
 
     def build_command(self, tree):
@@ -66,15 +66,15 @@ class MySQLDialect(SQLDialect):
         """Build a select statement from the given AST."""
         assert isinstance(tree, sql.Select)
 
-        template = 'SELECT {top}{distinct}{fields} FROM {table}{where}{group_by}{order_by}'
+        template = 'SELECT {distinct}{fields} FROM {table}{where}{group_by}{order_by}{limit}'
         return template.format(
-            top='TOP %s ' % tree.limited_to.count if tree.limited_to else '',
             distinct='DISTINCT ' if tree.is_distinct else '',
             fields=self.build_fields(tree.field_list, allow_aliases=True),
             table=self.build_table(tree.table, allow_joins=True),
             where=(' ' + self.build_where(tree.where_clause)) if tree.where_clause else '',
             group_by=(' ' + self.build_group_by(tree.grouping)) if tree.grouping else '',
-            order_by=(' ' + self.build_order_by(tree.grouping)) if tree.grouping else ''
+            order_by=(' ' + self.build_order_by(tree.grouping)) if tree.grouping else '',
+            limit = ' LIMIT %s' % tree.limited_to.count if tree.limited_to else ''
         )
 
     def build_insert(self, tree):

@@ -28,7 +28,7 @@ from sql_dialects.dialects import get_available_dialects, get_default_dialect, s
 
 __author__ = 'Aaron Hosford'
 __author_email__ = 'aaron.hosford@ericsson.com'
-__version__ = '0.0'
+__version__ = '0.1'
 __packages__ = ['sql_dialects', 'sql_dialects.dialects']
 __url__ = 'https://scmgr.eams.ericsson.net/PythonLibs/sql_dialects'
 __license__ = 'TBD'  # This will need to be open sourced if its dependents are.
@@ -42,7 +42,8 @@ __entry_points__ = {
     'sql_dialects': [
         'T-SQL = sql_dialects.dialects._t_sql:T_SQL',
         'MySQL = sql_dialects.dialects._mysql:MY_SQL',
-        # TODO: Add other dialects: Postgre and SQLite
+        'SQLite = sql_dialects.dialects._sqlite:SQLITE',
+        # TODO: Add other dialects, including Postgre
     ]
 }
 

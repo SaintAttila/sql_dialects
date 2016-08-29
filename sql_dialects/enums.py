@@ -16,11 +16,13 @@ class Nullary:
     NOW = 'now'          # Current date/time
     GUID = 'guid'        # Globally unique identifier
     VERSION = 'version'  # Database version
+    RANDOM = 'random'    # Pseudo-random integer
+    CHANGES = 'changes'  # Number of affected rows
 
     @classmethod
     def iter(cls):
         """Iterate over the enumerated values."""
-        return iter((cls.NOW, cls.GUID, cls.VERSION))
+        return iter((cls.NOW, cls.GUID, cls.VERSION, cls.RANDOM, cls.CHANGES))
 
     @classmethod
     def is_valid(cls, value):
@@ -38,11 +40,12 @@ class Unary:
     UPPER_CASE = 'upper case'
     LOWER_CASE = 'lower case'
     LENGTH = 'length'
+    ABS = 'abs'
 
     @classmethod
     def iter(cls):
         """Iterate over the enumerated values."""
-        return iter((cls.NOT, cls.NEG, cls.UPPER_CASE, cls.LOWER_CASE, cls.LENGTH))
+        return iter((cls.NOT, cls.NEG, cls.UPPER_CASE, cls.LOWER_CASE, cls.LENGTH, cls.ABS))
 
     @classmethod
     def is_valid(cls, value):
@@ -65,12 +68,17 @@ class Binary:
     OR = 'or'
     ROUND = 'round'
     FORMAT = 'format'
+    IF_NULL = 'if null'
+    BETWEEN = 'between'
+    IN = 'in'
+    LIKE = 'like'
+    NOT_IN = 'not in'
 
     @classmethod
     def iter(cls):
         """Iterate over the enumerated values."""
         return iter((cls.EQ, cls.NE, cls.LT, cls.GT, cls.LE, cls.GE, cls.AND, cls.OR, cls.ROUND,
-                     cls.FORMAT))
+                     cls.FORMAT, cls.IF_NULL, cls.BETWEEN, cls.IN, cls.LIKE, cls.NOT_IN))
 
     @classmethod
     def is_valid(cls, value):
@@ -183,11 +191,12 @@ class JoinTypes:
     LEFT = 'left'
     RIGHT = 'right'
     OUTER = 'outer'
+    CROSS = 'cross'
 
     @classmethod
     def iter(cls):
         """Iterate over the enumerated values."""
-        return iter((cls.INNER, cls.LEFT, cls.RIGHT, cls.OUTER))
+        return iter((cls.INNER, cls.LEFT, cls.RIGHT, cls.OUTER, cls.CROSS))
 
     @classmethod
     def is_valid(cls, value):

@@ -47,7 +47,7 @@ class TSQLDialect(SQLDialect):
             Binary.FORMAT: 'FORMAT({p1},{p2})',
 
             Ternary.IF_ELSE: 'IF {p1} {p2} ELSE {p3}',
-            Ternary.SUBSTRING: 'MID({p1}, {p2}, {p3})',
+            Ternary.SUBSTRING: 'SUBSTRING({p1}, {p2}, {p3})',
         }
 
     def build_select(self, tree):

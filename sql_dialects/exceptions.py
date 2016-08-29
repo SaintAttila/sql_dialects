@@ -15,3 +15,9 @@ class NoDefaultDialect(SQLDialectsError, KeyError):
     """
     Indicates that the default dialect was requested when no default dialect has been set.
     """
+
+
+class OperationNotSupported(SQLDialectsError, NotImplementedError):
+    """
+    Indicates that a dialect does not support a particular requested operation.
+    """
