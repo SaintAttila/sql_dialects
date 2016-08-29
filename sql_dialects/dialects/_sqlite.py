@@ -142,7 +142,7 @@ class SQLiteDialect(SQLDialect):
         assert isinstance(allow_joins, bool)
 
         if isinstance(tree, sql.Table):
-            return '.'.join('[%s]' % element for element in tree.identifier.path)
+            return '.'.join('"%s"' % element.replace('"', '""') for element in tree.identifier.path)
 
         assert isinstance(tree, sql.Join)
 
@@ -188,15 +188,15 @@ class SQLiteDialect(SQLDialect):
         if allow_aliases and isinstance(tree, sql.Alias):
             entry = self.build_value(tree.expression)
             if tree.name:
-                entry += ' AS [%s]' % tree.name
+                entry += ' AS "%s"' % tree.name.replace('"', '""')
             return entry
 
         assert isinstance(tree, sql.Field)
         if tree.table:
             table = self.build_table(tree.table, allow_joins=False)
-            return '%s.[%s]' % (table, tree.identifier.name)
+            return '%s."%s"' % (table, tree.identifier.name.replace('"', '""'))
         else:
-            return '[%s]' % tree.identifier.name
+            return '"%s"' % tree.identifier.name.replace('"', '""')
 
     def build_values(self, tree):
         """Build a value list from an AST."""
