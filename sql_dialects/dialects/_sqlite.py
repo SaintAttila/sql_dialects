@@ -87,7 +87,7 @@ class SQLiteDialect(SQLDialect):
         return template.format(
             table=self.build_table(tree.table, allow_joins=False),
             fields=(
-                (' (' + self.build_fields(tree.field_list, allow_aliases=False) + ')')
+                (' (' + self.build_fields(tree.field_list, allow_aliases=False, qualified=False) + ')')
                 if tree.field_list
                 else ''
             ),
@@ -115,7 +115,7 @@ class SQLiteDialect(SQLDialect):
             where=(' ' + self.build_where(tree.where_clause) if tree.where_clause else '')
         )
 
-    def build_fields(self, tree, *, allow_aliases):
+    def build_fields(self, tree, *, allow_aliases, qualified=True):
         """Build a field list from an AST."""
         assert tree is None or isinstance(tree, sql.FieldList)
         assert isinstance(allow_aliases, bool)
@@ -126,10 +126,10 @@ class SQLiteDialect(SQLDialect):
         fields = []
         for field in tree.entries:
             assert isinstance(field, sql.Alias)
-            entry = self.build_value(field.expression)
+            entry = self.build_value(field.expression, qualified=qualified)
             if allow_aliases:
                 if field.name:
-                    entry += ' AS [%s]' % field.name
+                    entry += ' AS "%s"' % field.name.replace('"', '""')
             else:
                 assert isinstance(field.expression, sql.Field)
                 assert field.name is None
@@ -183,16 +183,16 @@ class SQLiteDialect(SQLDialect):
         assert isinstance(tree, sql.OrderByEntry)
         return self.build_field(tree.field) + (' ASC' if tree.ascending else ' DESC')
 
-    def build_field(self, tree, *, allow_aliases=False):
+    def build_field(self, tree, *, allow_aliases=False, qualified=True):
         """Build a field in a field list from an AST."""
         if allow_aliases and isinstance(tree, sql.Alias):
-            entry = self.build_value(tree.expression)
+            entry = self.build_value(tree.expression, qualified=qualified)
             if tree.name:
                 entry += ' AS "%s"' % tree.name.replace('"', '""')
             return entry
 
         assert isinstance(tree, sql.Field)
-        if tree.table:
+        if qualified and tree.table:
             table = self.build_table(tree.table, allow_joins=False)
             return '%s."%s"' % (table, tree.identifier.name.replace('"', '""'))
         else:
@@ -215,12 +215,12 @@ class SQLiteDialect(SQLDialect):
                                     self.build_value(value))
                          for field, value in zip(fields.entries, values.entries))
 
-    def build_value(self, tree):
+    def build_value(self, tree, *, qualified=True):
         """Build a value from an AST."""
         assert isinstance(tree, (sql.Value, sql.Select))
 
         if isinstance(tree, sql.Field):
-            return self.build_field(tree)
+            return self.build_field(tree, qualified=qualified)
         elif isinstance(tree, sql.Parameter):
             return '?'
         elif isinstance(tree, sql.Literal):
