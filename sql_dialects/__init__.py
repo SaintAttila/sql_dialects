@@ -22,13 +22,13 @@ Usage:
 import sql_dialects.ast
 import sql_dialects.dialects
 
-from sql_dialects.ast import select, update, insert, delete
+from sql_dialects.ast import describe, select, update, insert, delete
 from sql_dialects.dialects import get_available_dialects, get_default_dialect, set_default_dialect
 
 
 __author__ = 'Aaron Hosford'
 __author_email__ = 'aaron.hosford@ericsson.com'
-__version__ = '0.1'
+__version__ = '0.2'
 __packages__ = ['sql_dialects', 'sql_dialects.dialects']
 __url__ = 'https://scmgr.eams.ericsson.net/PythonLibs/sql_dialects'
 __license__ = 'TBD'  # This will need to be open sourced if its dependents are.
@@ -52,6 +52,7 @@ __all__ = [
     'F',
     'V',
     'P',
+    'describe',
     'select',
     'update',
     'insert',

@@ -243,7 +243,7 @@ class SQLWriteCommand(SQLCommand):
     """Abstract base class for SQL commands that write new data to the database, i.e. inserts and updates."""
 
     def __init__(self, table=None, fields=None, values=None, where=None):
-        assert values is None or isinstance(values, (ValueList, Select))
+        assert values is None or isinstance(values, (ValueList, Describe, Select))
         assert fields is None or isinstance(fields, FieldList)
 
         if fields is not None and values is not None:
@@ -355,6 +355,76 @@ class SQLWriteCommand(SQLCommand):
             return False
         assert isinstance(other, SQLWriteCommand)
         return same(self._values, other._values)
+
+
+# TODO: Add Create, Alter, and Drop commands for table manipulation.
+class Describe(SQLCommand):
+    """A SQL describe table statement, as an AST."""
+
+    def __init__(self, table=None):
+        # Only tables, not joins.
+        if table is not None:
+            assert isinstance(table, Table)
+        super().__init__(table, fields=None, where=None)
+
+    def _get_repr_args(self):
+        return [
+            ('table', self._table, None, False),
+        ]
+
+    @property
+    def table(self):
+        """The table or JOIN that this SQL command operates on."""
+        return self._table
+
+    @table.setter
+    def table(self, table):
+        """The table or JOIN that this SQL command operates on."""
+        if isinstance(table, Identifier):
+            table = Table(table)
+        elif isinstance(table, str):
+            table = Table(Identifier((table,)))
+        else:
+            assert isinstance(table, TableExpression)
+        if isinstance(table, Table):
+            assert table.identifier
+        self._table = table
+
+    @property
+    def field_list(self):
+        """The list of fields for this SQL command."""
+        return self._fields
+
+    @field_list.setter
+    def field_list(self, fields):
+        """The list of fields for this SQL command."""
+        raise NotImplementedError("DESCRIBE commands do not support field lists.")
+
+    @property
+    def where_clause(self):
+        """The WHERE clause for this SQL command."""
+        return self._where_clause
+
+    @where_clause.setter
+    def where_clause(self, clause):
+        """The WHERE clause for this SQL command."""
+        raise NotImplementedError("DESCRIBE commands do not support where clauses.")
+
+    def fields(self, *fields):
+        """Create a new SQL command object by adding a list of fields."""
+        raise NotImplementedError("DESCRIBE commands do not support field lists.")
+
+    def join(self, table):
+        """Create a new SQL command object by joining the table to another one."""
+        raise NotImplementedError("DESCRIBE commands do not support table joins.")
+
+    def on(self, clause):
+        """Create a new SQL command object by adding an ON clause to the join."""
+        raise NotImplementedError("DESCRIBE commands do not support table joins.")
+
+    def where(self, clause=None, **field_value_pairs):
+        """Create a new SQL command object by adding a where clause."""
+        raise NotImplementedError("DESCRIBE commands do not support where clauses.")
 
 
 class Select(SQLCommand):
@@ -525,7 +595,7 @@ class Update(SQLWriteCommand):
     """A SQL update statement, as an AST."""
 
     def __init__(self, table=None, fields=None, values=None, where=None):
-        assert not isinstance(values, Select)
+        assert not isinstance(values, (Select, Describe))
         super().__init__(table, fields, values, where)
 
     def _get_repr_args(self):
@@ -706,6 +776,8 @@ class Table(TableExpression):
             identifier = Identifier(())
         elif isinstance(identifier, tuple):
             identifier = Identifier(identifier)
+        elif isinstance(identifier, str):
+            identifier = Identifier((identifier,))
         else:
             assert isinstance(identifier, Identifier)
 
@@ -1600,10 +1672,10 @@ class Operation(Value):
 
 
 class QueryValue(Value):
-    """A SQL select statement, acting as a SQL value expression within another SQL statement."""
+    """A SQL select or describe statement, acting as a SQL value expression within another SQL statement."""
 
     def __init__(self, query):
-        assert isinstance(query, Select)
+        assert isinstance(query, (Select, Describe))
         assert query.field_list.width == 1
 
         super().__init__()
@@ -1629,6 +1701,13 @@ class QueryValue(Value):
             return False
         assert isinstance(other, QueryValue)
         return same(self._query, other._query)
+
+
+def describe(table=None):
+    """Create a newSQL describe statement, optionally identifying which table to describe."""
+    if isinstance(table, str):
+        table = Table(table)
+    return Describe(table)
 
 
 def select(*fields):

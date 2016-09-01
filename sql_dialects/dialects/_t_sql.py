@@ -50,6 +50,15 @@ class TSQLDialect(SQLDialect):
             Ternary.SUBSTRING: 'SUBSTRING({p1}, {p2}, {p3})',
         }
 
+    def build_describe(self, tree):
+        """Build a describe statement from the given AST."""
+        assert isinstance(tree, sql.Describe)
+
+        template = 'EXEC sp_columns {table}'
+        return template.format(
+            table=self.build_table(tree.table, allow_joins=False)
+        )
+
     def build_select(self, tree):
         """Build a select statement from the given AST."""
         assert isinstance(tree, sql.Select)

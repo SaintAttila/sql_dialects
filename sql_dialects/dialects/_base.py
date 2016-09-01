@@ -21,6 +21,7 @@ class SQLDialect(metaclass=ABCMeta):
         self._name = name
 
         self._handlers = {
+            sql_dialects.ast.Describe: self.build_describe,
             sql_dialects.ast.Select: self.build_select,
             sql_dialects.ast.Insert: self.build_insert,
             sql_dialects.ast.Update: self.build_update,
@@ -42,6 +43,12 @@ class SQLDialect(metaclass=ABCMeta):
         assert isinstance(tree, sql_dialects.ast.SQLCommand)
         assert type(tree) in self._handlers
         return self._handlers[type(tree)](tree)
+
+    @abstractmethod
+    def build_describe(self, tree):
+        """Build a describe statement from the given AST."""
+        assert isinstance(tree, sql_dialects.ast.Describe)
+        raise NotImplementedError()
 
     @abstractmethod
     def build_select(self, tree):

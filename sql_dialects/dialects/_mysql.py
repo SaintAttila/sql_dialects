@@ -62,6 +62,15 @@ class MySQLDialect(SQLDialect):
         """
         return super().build_command(tree) + ';'  # MySQL requires ; termination for commands
 
+    def build_describe(self, tree):
+        """Build a describe statement from the given AST."""
+        assert isinstance(tree, sql.Describe)
+
+        template = 'DESCRIBE {table}'
+        return template.format(
+            table=self.build_table(tree.table, allow_joins=False)
+        )
+
     def build_select(self, tree):
         """Build a select statement from the given AST."""
         assert isinstance(tree, sql.Select)
@@ -74,7 +83,7 @@ class MySQLDialect(SQLDialect):
             where=(' ' + self.build_where(tree.where_clause)) if tree.where_clause else '',
             group_by=(' ' + self.build_group_by(tree.grouping)) if tree.grouping else '',
             order_by=(' ' + self.build_order_by(tree.grouping)) if tree.grouping else '',
-            limit = ' LIMIT %s' % tree.limited_to.count if tree.limited_to else ''
+            limit=' LIMIT %s' % tree.limited_to.count if tree.limited_to else ''
         )
 
     def build_insert(self, tree):
