@@ -27,11 +27,11 @@ from sql_dialects.dialects import get_available_dialects, get_default_dialect, s
 
 
 __author__ = 'Aaron Hosford'
-__author_email__ = 'aaron.hosford@ericsson.com'
+__author_email__ = 'hosford42@gmail.com'
 __version__ = '0.2'
 __packages__ = ['sql_dialects', 'sql_dialects.dialects']
-__url__ = 'https://scmgr.eams.ericsson.net/PythonLibs/sql_dialects'
-__license__ = 'TBD'  # This will need to be open sourced if its dependents are.
+__url__ = 'https://github.com/SaintAttila/sql_dialects'
+__license__ = 'MIT'
 __description__ = 'Dialect-agnostic construction of SQL commands'
 
 # Registration of built-in plugins. See http://stackoverflow.com/a/9615473/4683578 for
